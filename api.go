@@ -17,16 +17,13 @@ type APIServer struct {
 	store         Storage
 }
 
+type apiFunc func(http.ResponseWriter, *http.Request) error
+
+
 func WriteJSON(w http.ResponseWriter, status int, v any) error {
 	w.WriteHeader(status)
 	w.Header().Set("Content-Type", "application/json")
 	return json.NewEncoder(w).Encode(v)
-}
-
-type apiFunc func(http.ResponseWriter, *http.Request) error
-
-type apiError struct {
-	Error string `json:"error"`
 }
 
 func makeHTTPHandleFunc(f apiFunc) http.HandlerFunc {
@@ -120,18 +117,6 @@ func (s *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) 
 	return WriteJSON(w, http.StatusOK, account)
 }
 
-func createJWT(account *Account) (string, error) {
-	claims := &jwt.MapClaims{
-		"ExpiresAt":     15000,
-		"accountNumber": account.Number,
-	}
-
-	secret := os.Getenv("JWT_SECRET")
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-
-	return token.SignedString([]byte(secret))
-}
-
 func (s *APIServer) handleDeleteAccount(w http.ResponseWriter, r *http.Request) error {
 	id, err := getID(r)
 	if err != nil {
@@ -164,6 +149,20 @@ func getID(r *http.Request) (int, error) {
 	return id, nil
 }
 
+// JWT Functions
+func createJWT(account *Account) (string, error) {
+	claims := &jwt.MapClaims{
+		"ExpiresAt":     15000,
+		"accountNumber": account.Number,
+	}
+
+	secret := os.Getenv("JWT_SECRET")
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	return token.SignedString([]byte(secret))
+}
+
+
 func withJWTAuth(handlerFunc http.HandlerFunc, store Storage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Calling JWT auth middleware")
@@ -172,43 +171,39 @@ func withJWTAuth(handlerFunc http.HandlerFunc, store Storage) http.HandlerFunc {
 
 		token, err := validateJWT(tokenString)
 		if err != nil {
-            permissionDenied(w)
-            log.Println("Invalid Token")
+			permissionDenied(w)
+			log.Println("Invalid Token")
 			return
 		}
 
 		if !token.Valid {
-            permissionDenied(w)
-            log.Println("Invalid Token")
-            return
+			permissionDenied(w)
+			log.Println("Invalid Token")
+			return
 		}
 
 		userId, err := getID(r)
 		if err != nil {
-            permissionDenied(w)
-            log.Println("No id in params")
+			permissionDenied(w)
+			log.Println("No id in params")
 			return
 		}
 		account, err := store.GetAccountByID(userId)
 		if err != nil {
-            permissionDenied(w)
-            log.Println("Invalid account number")
+			permissionDenied(w)
+			log.Println("Invalid account number")
 			return
 		}
 
-        claims := token.Claims.(jwt.MapClaims)
-        if account.Number != int64(claims["accountNumber"].(float64)) {
-            log.Println("Account numbers are not equal")
-            permissionDenied(w)
-            return
-        }
+		claims := token.Claims.(jwt.MapClaims)
+		if account.Number != int64(claims["accountNumber"].(float64)) {
+			log.Println("Account numbers are not equal")
+			permissionDenied(w)
+			return
+		}
 
 		handlerFunc(w, r)
 	}
-}
-
-func permissionDenied(w http.ResponseWriter) {
-	WriteJSON(w, http.StatusForbidden, apiError{Error: "Permission Denied"})
 }
 
 func validateJWT(tokenString string) (*jwt.Token, error) {
