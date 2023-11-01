@@ -19,7 +19,6 @@ type APIServer struct {
 
 type apiFunc func(http.ResponseWriter, *http.Request) error
 
-
 func WriteJSON(w http.ResponseWriter, status int, v any) error {
 	w.WriteHeader(status)
 	w.Header().Set("Content-Type", "application/json")
@@ -44,6 +43,7 @@ func NewAPIServer(listenAddress string, store Storage) *APIServer {
 func (s *APIServer) Run() {
 	router := mux.NewRouter()
 
+	router.HandleFunc("/login", makeHTTPHandleFunc(s.handleLogin))
 	router.HandleFunc("/account", makeHTTPHandleFunc(s.handleAccount))
 	router.HandleFunc("/account/{id}", withJWTAuth(makeHTTPHandleFunc(s.handleGetAccountByID), s.store))
 	router.HandleFunc("/transfer", makeHTTPHandleFunc(s.handleTransfer))
@@ -61,6 +61,17 @@ func (s *APIServer) handleAccount(w http.ResponseWriter, r *http.Request) error 
 		return s.handleCreateAccount(w, r)
 	}
 	return fmt.Errorf("method is not allowed %s", r.Method)
+}
+
+func (s *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
+    var req LoginRequest
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        return err
+    }
+
+
+
+	return WriteJSON(w, http.StatusOK, req)
 }
 
 func (s *APIServer) handleGetAccountByID(w http.ResponseWriter, r *http.Request) error {
@@ -102,7 +113,11 @@ func (s *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) 
 		return err
 	}
 
-	account := NewAccount(createAccountReq.FirstName, createAccountReq.LastName)
+	account, err := NewAccount(createAccountReq.Email, createAccountReq.Password, createAccountReq.FirstName, createAccountReq.LastName, createAccountReq.PhoneNumber)
+    if err != nil {
+        return err
+    }
+
 	if err := s.store.CreateAccount(account); err != nil {
 		return err
 	}
@@ -153,7 +168,7 @@ func getID(r *http.Request) (int, error) {
 func createJWT(account *Account) (string, error) {
 	claims := &jwt.MapClaims{
 		"ExpiresAt":     15000,
-		"accountNumber": account.Number,
+		"accountNumber": account.AccountNumber,
 	}
 
 	secret := os.Getenv("JWT_SECRET")
@@ -161,7 +176,6 @@ func createJWT(account *Account) (string, error) {
 
 	return token.SignedString([]byte(secret))
 }
-
 
 func withJWTAuth(handlerFunc http.HandlerFunc, store Storage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -196,7 +210,7 @@ func withJWTAuth(handlerFunc http.HandlerFunc, store Storage) http.HandlerFunc {
 		}
 
 		claims := token.Claims.(jwt.MapClaims)
-		if account.Number != int64(claims["accountNumber"].(float64)) {
+		if account.AccountNumber != int64(claims["accountNumber"].(float64)) {
 			log.Println("Account numbers are not equal")
 			permissionDenied(w)
 			return
@@ -216,3 +230,4 @@ func validateJWT(tokenString string) (*jwt.Token, error) {
 		return []byte(secret), nil
 	})
 }
+
