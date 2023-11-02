@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/mux"
@@ -140,6 +141,10 @@ func (s *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) 
 		return err
 	}
 
+    if err := validateAccountInfo(*account); err != nil {
+        return err
+    }
+
 	if err := s.store.CreateAccount(account); err != nil {
 		return err
 	}
@@ -252,4 +257,12 @@ func validateJWT(tokenString string) (*jwt.Token, error) {
 		}
 		return []byte(secret), nil
 	})
+}
+
+func validateAccountInfo(info Account) error {
+    if strings.TrimSpace(info.Email) == "" || strings.TrimSpace(info.Password) == "" || strings.TrimSpace(info.FirstName) == ""  || strings.TrimSpace(info.LastName) == ""  || strings.TrimSpace(info.PhoneNumber) == ""  {
+        return fmt.Errorf("No whitespace allowed")
+    }
+
+    return nil
 }

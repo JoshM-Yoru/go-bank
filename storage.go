@@ -80,6 +80,7 @@ func (s *PostgresStore) CreateAccount(account *Account) error {
     (email, password, first_name, last_name, phone_number, account_number, balance, created_at, role, is_active) 
     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
 
+
 	_, err := s.db.Query(
 		query,
 		account.Email,
@@ -204,4 +205,3 @@ func (s *PostgresStore) CreateTransactionTable() error {
 
 	return err
 }
-
