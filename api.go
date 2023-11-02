@@ -47,6 +47,7 @@ func (s *APIServer) Run() {
 	router.HandleFunc("/account", makeHTTPHandleFunc(s.handleAccount))
 	router.HandleFunc("/account/{id}", withJWTAuth(makeHTTPHandleFunc(s.handleGetAccountByID), s.store))
 	router.HandleFunc("/transfer", makeHTTPHandleFunc(s.handleTransfer))
+    http.Handle("/", router)
 
 	log.Println("JSON API running on port: ", s.listenAddress)
 
@@ -64,14 +65,35 @@ func (s *APIServer) handleAccount(w http.ResponseWriter, r *http.Request) error 
 }
 
 func (s *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
-    var req LoginRequest
-    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        return err
+	if r.Method != "POST" {
+		invalidMethod(w)
+	}
+
+	var loginReq LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&loginReq); err != nil {
+		return err
+	}
+
+	account, err := s.store.GetAccountByEmail(loginReq.Email)
+	if err != nil {
+		permissionDenied(w)
+	}
+
+    if !account.validatePassword(loginReq.Password) {
+        fmt.Errorf("Incorrect Username or Password")
     }
 
+	token, err := createJWT(account)
+	if err != nil {
+		return err
+	}
 
+	response := LoginResponse{
+		AccountNumber: account.AccountNumber,
+		Token:         token,
+	}
 
-	return WriteJSON(w, http.StatusOK, req)
+	return WriteJSON(w, http.StatusOK, response)
 }
 
 func (s *APIServer) handleGetAccountByID(w http.ResponseWriter, r *http.Request) error {
@@ -114,9 +136,9 @@ func (s *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) 
 	}
 
 	account, err := NewAccount(createAccountReq.Email, createAccountReq.Password, createAccountReq.FirstName, createAccountReq.LastName, createAccountReq.PhoneNumber)
-    if err != nil {
-        return err
-    }
+	if err != nil {
+		return err
+	}
 
 	if err := s.store.CreateAccount(account); err != nil {
 		return err
@@ -154,6 +176,7 @@ func (s *APIServer) handleTransfer(w http.ResponseWriter, r *http.Request) error
 	return WriteJSON(w, http.StatusOK, transferReq)
 }
 
+// Get Functions
 func getID(r *http.Request) (int, error) {
 	idStr := mux.Vars(r)["id"]
 	id, err := strconv.Atoi(idStr)
@@ -230,4 +253,3 @@ func validateJWT(tokenString string) (*jwt.Token, error) {
 		return []byte(secret), nil
 	})
 }
-

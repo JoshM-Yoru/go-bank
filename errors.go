@@ -9,3 +9,7 @@ type apiError struct {
 func permissionDenied(w http.ResponseWriter) {
 	WriteJSON(w, http.StatusForbidden, apiError{Error: "Permission Denied"})
 }
+
+func invalidMethod(w http.ResponseWriter) {
+	WriteJSON(w, http.StatusForbidden, apiError{Error: "Invalid Method Used"})
+}

@@ -13,6 +13,7 @@ type Storage interface {
 	UpdateAccount(*Account) error
 	GetAccounts() ([]*Account, error)
 	GetAccountByID(int) (*Account, error)
+	GetAccountByEmail(string) (*Account, error)
 }
 
 type PostgresStore struct {
@@ -39,7 +40,7 @@ func (s *PostgresStore) Init() error {
 }
 
 func (s *PostgresStore) CreateAccountTable() error {
-	query := `create table account (
+	query := `create table if not exists account (
         id serial primary key,
         email varchar(50),
         password varchar(100),
@@ -61,7 +62,7 @@ func (s *PostgresStore) CreateAccount(account *Account) error {
     (email, password, first_name, last_name, phone_number, account_number, balance, created_at) 
     values ($1, $2, $3, $4, $5, $6, $7, $8)`
 
-	res, err := s.db.Query(
+	_, err := s.db.Query(
 		query,
 		account.Email,
 		account.Password,
@@ -75,7 +76,6 @@ func (s *PostgresStore) CreateAccount(account *Account) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("%+v\n", res)
 
 	return nil
 }

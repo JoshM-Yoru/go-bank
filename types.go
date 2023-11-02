@@ -18,7 +18,12 @@ type CreateAccountRequest struct {
 
 type LoginRequest struct {
 	Email    string `json:"email"`
-	Password string `json:"-"`
+	Password string `json:"password"`
+}
+
+type LoginResponse struct {
+	AccountNumber int64  `json:"accountNumber"`
+	Token         string `json:"token"`
 }
 
 type Account struct {
@@ -62,4 +67,8 @@ func hashPassword(password string) (string, error) {
 	}
 
 	return string(hashedPW), nil
+}
+
+func (account *Account) validatePassword(pw string) bool {
+	return bcrypt.CompareHashAndPassword([]byte(account.Password), []byte(pw)) == nil
 }
