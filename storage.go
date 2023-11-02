@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	_ "github.com/lib/pq"
 )
@@ -36,20 +37,37 @@ func NewPostgresStore() (*PostgresStore, error) {
 }
 
 func (s *PostgresStore) Init() error {
-	return s.CreateAccountTable()
+	accTable := s.CreateAccountTable()
+    if accTable !=nil {
+        return accTable
+    }
+
+	transferTable := s.CreateTransferTable()
+    if transferTable !=nil {
+        return transferTable
+    }
+
+	transactionTable := s.CreateTransactionTable()
+    if transactionTable !=nil {
+        return transactionTable
+    }
+
+	return nil
 }
 
 func (s *PostgresStore) CreateAccountTable() error {
 	query := `create table if not exists account (
         id serial primary key,
-        email varchar(50),
-        password varchar(100),
-        first_name varchar(50),
-        last_name varchar(50),
+        email varchar(50) unique not null,
+        password varchar(100) not null,
+        first_name varchar(50) not null,
+        last_name varchar(50) not null,
         phone_number varchar(11),
         account_number serial, 
-        balance serial,
-        created_at timestamp
+        balance bigint not null,
+        created_at timestamp,
+        role int,
+        is_active boolean
     )`
 
 	_, err := s.db.Exec(query)
@@ -59,8 +77,8 @@ func (s *PostgresStore) CreateAccountTable() error {
 
 func (s *PostgresStore) CreateAccount(account *Account) error {
 	query := `insert into account 
-    (email, password, first_name, last_name, phone_number, account_number, balance, created_at) 
-    values ($1, $2, $3, $4, $5, $6, $7, $8)`
+    (email, password, first_name, last_name, phone_number, account_number, balance, created_at, role, is_active) 
+    values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
 
 	_, err := s.db.Query(
 		query,
@@ -72,9 +90,13 @@ func (s *PostgresStore) CreateAccount(account *Account) error {
 		account.AccountNumber,
 		account.Balance,
 		account.CreatedAt,
+		account.Role,
+        account.IsActive,
 	)
 	if err != nil {
-		return err
+        if strings.Contains(err.Error(), "duplicate") {
+            return fmt.Errorf("Email in use")
+        }
 	}
 
 	return nil
@@ -85,12 +107,12 @@ func (s *PostgresStore) UpdateAccount(*Account) error {
 }
 
 func (s *PostgresStore) DeleteAccount(id int) error {
-	_, err := s.db.Query("delete from account where id = $1", id)
+	_, err := s.db.Query("update account set is_active = false where id = $1", id)
 	return err
 }
 
 func (s *PostgresStore) GetAccounts() ([]*Account, error) {
-	rows, err := s.db.Query("select * from account")
+	rows, err := s.db.Query("select * from account where is_active = true")
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +131,7 @@ func (s *PostgresStore) GetAccounts() ([]*Account, error) {
 }
 
 func (s *PostgresStore) GetAccountByID(id int) (*Account, error) {
-	rows, err := s.db.Query("select * from account where id = $1", id)
+	rows, err := s.db.Query("select * from account where is_active = true and id = $1", id)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +143,7 @@ func (s *PostgresStore) GetAccountByID(id int) (*Account, error) {
 }
 
 func (s *PostgresStore) GetAccountByEmail(email string) (*Account, error) {
-	rows, err := s.db.Query("select * from account where email = $1", email)
+	rows, err := s.db.Query("select * from account where is_active = true email = $1", email)
 	if err != nil {
 		return nil, err
 	}
@@ -148,3 +170,38 @@ func scanIntoAccount(rows *sql.Rows) (*Account, error) {
 
 	return account, err
 }
+
+
+func (s *PostgresStore) CreateTransferTable() error {
+	query := `create table if not exists transfer (
+        id serial primary key,
+        from_account int references account(id) not null,
+        to_account int references account(id) not null,
+        amount bigint not null,
+        description varchar(200),
+        created_at timestamp
+   )`
+
+	_, err := s.db.Query(query)
+
+	return err
+}
+
+func (s *PostgresStore) CreateTransfer() {}
+
+func (s *PostgresStore) CreateTransactionTable() error {
+	query := `create table if not exists transaction (
+        id serial primary key,
+        account int references account(id) not null,
+        transaction_source varchar(50) not null,
+        amount bigint not null,
+        description varchar(200),
+        created_at timestamp,
+        transaction_type int
+    )`
+
+	_, err := s.db.Query(query)
+
+	return err
+}
+
