@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -48,7 +49,7 @@ func (s *APIServer) Run() {
 	router.HandleFunc("/account", makeHTTPHandleFunc(s.handleAccount))
 	router.HandleFunc("/account/{id}", withJWTAuth(makeHTTPHandleFunc(s.handleGetAccountByID), s.store))
 	router.HandleFunc("/transfer", makeHTTPHandleFunc(s.handleTransfer))
-    http.Handle("/", router)
+	http.Handle("/", router)
 
 	log.Println("JSON API running on port: ", s.listenAddress)
 
@@ -80,9 +81,9 @@ func (s *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
 		permissionDenied(w)
 	}
 
-    if !account.validatePassword(loginReq.Password) {
-        fmt.Errorf("Incorrect Username or Password")
-    }
+	if !account.validatePassword(loginReq.Password) {
+		return fmt.Errorf("Incorrect Email or Password")
+	}
 
 	token, err := createJWT(account)
 	if err != nil {
@@ -141,9 +142,9 @@ func (s *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) 
 		return err
 	}
 
-    if err := validateAccountInfo(*account); err != nil {
-        return err
-    }
+	if err := validateAccountInfo(account); err != nil {
+		return err
+	}
 
 	if err := s.store.CreateAccount(account); err != nil {
 		return err
@@ -179,17 +180,6 @@ func (s *APIServer) handleTransfer(w http.ResponseWriter, r *http.Request) error
 	}
 	defer r.Body.Close()
 	return WriteJSON(w, http.StatusOK, transferReq)
-}
-
-// Get Functions
-func getID(r *http.Request) (int, error) {
-	idStr := mux.Vars(r)["id"]
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
-		return id, fmt.Errorf("Invalid id, given %s", idStr)
-	}
-
-	return id, nil
 }
 
 // JWT Functions
@@ -248,6 +238,7 @@ func withJWTAuth(handlerFunc http.HandlerFunc, store Storage) http.HandlerFunc {
 	}
 }
 
+// validate functions
 func validateJWT(tokenString string) (*jwt.Token, error) {
 	secret := os.Getenv("JWT_SECRET")
 
@@ -259,10 +250,31 @@ func validateJWT(tokenString string) (*jwt.Token, error) {
 	})
 }
 
-func validateAccountInfo(info Account) error {
-    if strings.TrimSpace(info.Email) == "" || strings.TrimSpace(info.Password) == "" || strings.TrimSpace(info.FirstName) == ""  || strings.TrimSpace(info.LastName) == ""  || strings.TrimSpace(info.PhoneNumber) == ""  {
-        return fmt.Errorf("No whitespace allowed")
-    }
+func validateAccountInfo(info *Account) error {
+	if strings.TrimSpace(info.Email) == "" || strings.TrimSpace(info.FirstName) == "" || strings.TrimSpace(info.LastName) == "" || strings.TrimSpace(info.PhoneNumber) == "" {
+		return fmt.Errorf("No whitespace allowed")
+	}
 
-    return nil
+	emailRegex := `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
+
+	if !regexp.MustCompile(emailRegex).MatchString(info.Email) {
+		return fmt.Errorf("Email format is not valid")
+	}
+
+	if len(strings.TrimSpace(info.Password)) < 6 || !regexp.MustCompile("[0-9]").MatchString(info.Password) || !regexp.MustCompile("[A-Z]").MatchString(info.Password) {
+		return fmt.Errorf("Password must be 6 or more characters, include a capital letter, and include a number")
+	}
+
+	return nil
+}
+
+// Get Functions
+func getID(r *http.Request) (int, error) {
+	idStr := mux.Vars(r)["id"]
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		return id, fmt.Errorf("Invalid id, given %s", idStr)
+	}
+
+	return id, nil
 }
