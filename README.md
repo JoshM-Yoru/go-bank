@@ -2,6 +2,7 @@
 This is a demo full stack bank application written in Golang and React-Typescript
 
 ### Todo
+- Complete Account handling before moving onto transfer and transactions
 - Add roles, including levels of access
 - Complete JWT handling
 - Implement Frontend
