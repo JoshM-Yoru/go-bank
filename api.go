@@ -261,6 +261,12 @@ func validateAccountInfo(info *Account) error {
 		return fmt.Errorf("Email format is not valid")
 	}
 
+    nameRegex :=`[^\p{L}\s'-]+`
+
+    if regexp.MustCompile(nameRegex).MatchString(info.FirstName) || regexp.MustCompile(nameRegex).MatchString(info.LastName) {
+        return fmt.Errorf("Names cannot contain numbers or special characters, however apostrophes and hyphens are allowed")
+    }
+
 	if len(strings.TrimSpace(info.Password)) < 6 || !regexp.MustCompile("[0-9]").MatchString(info.Password) || !regexp.MustCompile("[A-Z]").MatchString(info.Password) {
 		return fmt.Errorf("Password must be 6 or more characters, include a capital letter, and include a number")
 	}

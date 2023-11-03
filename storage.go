@@ -62,6 +62,7 @@ func (s *PostgresStore) CreateAccountTable() error {
         password varchar(100) not null,
         first_name varchar(50) not null,
         last_name varchar(50) not null,
+        user_name varchar(50) not null,
         phone_number varchar(11),
         account_number serial, 
         balance bigint not null,
@@ -77,8 +78,8 @@ func (s *PostgresStore) CreateAccountTable() error {
 
 func (s *PostgresStore) CreateAccount(account *Account) error {
 	query := `insert into account 
-    (email, password, first_name, last_name, phone_number, account_number, balance, created_at, role, is_active) 
-    values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
+    (email, password, first_name, last_name, user_name, phone_number, account_number, balance, created_at, role, is_active) 
+    values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
 
 
 	_, err := s.db.Query(
@@ -87,6 +88,7 @@ func (s *PostgresStore) CreateAccount(account *Account) error {
 		account.Password,
 		account.FirstName,
 		account.LastName,
+        account.UserName,
 		account.PhoneNumber,
 		account.AccountNumber,
 		account.Balance,
@@ -163,10 +165,13 @@ func scanIntoAccount(rows *sql.Rows) (*Account, error) {
 		&account.Password,
 		&account.FirstName,
 		&account.LastName,
+		&account.UserName,
 		&account.PhoneNumber,
 		&account.AccountNumber,
 		&account.Balance,
 		&account.CreatedAt,
+		&account.Role,
+		&account.IsActive,
 	)
 
 	return account, err

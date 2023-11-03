@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"math/rand"
+	"strconv"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -13,6 +14,7 @@ type CreateAccountRequest struct {
 	Password    string `json:"-"`
 	FirstName   string `json:"firstName"`
 	LastName    string `json:"lastName"`
+	UserName    string `json:"userName"`
 	PhoneNumber string `json:"phoneNumber"`
 }
 
@@ -48,6 +50,7 @@ type Account struct {
 	Password      string    `json:"-"`
 	FirstName     string    `json:"firstName"`
 	LastName      string    `json:"lastName"`
+	UserName      string    `json:"userName"`
 	PhoneNumber   string    `json:"phoneNumber"`
 	AccountNumber int64     `json:"accountNumber"`
 	Balance       int64     `json:"balance"`
@@ -72,11 +75,11 @@ func NewAdminAccount(email, password, firstName, lastName, phoneNumber string) (
 		Password:      hashedPassword,
 		FirstName:     firstName,
 		LastName:      lastName,
+		UserName:      "$" + firstName + "." + lastName + "#" + strconv.Itoa(int(rand.Intn(9000)+1000)),
 		PhoneNumber:   phoneNumber,
 		AccountNumber: int64(rand.Intn(1000000)),
 		CreatedAt:     time.Now().UTC(),
 		Role:          Admin,
-		IsActive:      true,
 	}, nil
 }
 
@@ -91,6 +94,7 @@ func NewEmployeeAccount(email, password, firstName, lastName, phoneNumber string
 		Password:      hashedPassword,
 		FirstName:     firstName,
 		LastName:      lastName,
+		UserName:      "$" + firstName + "." + lastName + "#" + strconv.Itoa(int(rand.Intn(9000)+1000)),
 		PhoneNumber:   phoneNumber,
 		AccountNumber: int64(rand.Intn(1000000)),
 		CreatedAt:     time.Now().UTC(),
@@ -110,6 +114,7 @@ func NewAccount(email, password, firstName, lastName, phoneNumber string) (*Acco
 		Password:      hashedPassword,
 		FirstName:     firstName,
 		LastName:      lastName,
+		UserName:      "$" + firstName + "." + lastName + "#" + strconv.Itoa(int(rand.Intn(9000)+1000)),
 		PhoneNumber:   phoneNumber,
 		AccountNumber: int64(rand.Intn(1000000)),
 		CreatedAt:     time.Now().UTC(),
