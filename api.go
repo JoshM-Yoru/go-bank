@@ -78,7 +78,7 @@ func (s *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
 
 	account, err := s.store.GetAccountByEmail(loginReq.Email)
 	if err != nil {
-		permissionDenied(w)
+		return fmt.Errorf("Incorrect Email or Password")
 	}
 
 	if !account.validatePassword(loginReq.Password) {
@@ -251,8 +251,8 @@ func validateJWT(tokenString string) (*jwt.Token, error) {
 }
 
 func validateAccountInfo(info *Account) error {
-	if strings.TrimSpace(info.Email) == "" || strings.TrimSpace(info.FirstName) == "" || strings.TrimSpace(info.LastName) == "" || strings.TrimSpace(info.PhoneNumber) == "" {
-		return fmt.Errorf("No whitespace allowed")
+	if strings.TrimSpace(info.Email) == "" || strings.TrimSpace(info.FirstName) == "" || strings.TrimSpace(info.LastName) == "" {
+		return fmt.Errorf("No whitespace or blank fields allowed")
 	}
 
 	emailRegex := `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
@@ -261,11 +261,11 @@ func validateAccountInfo(info *Account) error {
 		return fmt.Errorf("Email format is not valid")
 	}
 
-    nameRegex :=`[^\p{L}\s'-]+`
+	nameRegex := `[^\p{L}\s'-]+`
 
-    if regexp.MustCompile(nameRegex).MatchString(info.FirstName) || regexp.MustCompile(nameRegex).MatchString(info.LastName) {
-        return fmt.Errorf("Names cannot contain numbers or special characters, however apostrophes and hyphens are allowed")
-    }
+	if regexp.MustCompile(nameRegex).MatchString(info.FirstName) || regexp.MustCompile(nameRegex).MatchString(info.LastName) {
+		return fmt.Errorf("Names cannot contain numbers or special characters, however apostrophes and hyphens are allowed")
+	}
 
 	if len(strings.TrimSpace(info.Password)) < 6 || !regexp.MustCompile("[0-9]").MatchString(info.Password) || !regexp.MustCompile("[A-Z]").MatchString(info.Password) {
 		return fmt.Errorf("Password must be 6 or more characters, include a capital letter, and include a number")

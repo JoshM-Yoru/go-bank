@@ -55,20 +55,19 @@ func (s *PostgresStore) Init() error {
 	return nil
 }
 
-func (s *PostgresStore) CreateAccountTable() error {
-	query := `create table if not exists account (
-        id serial primary key,
+func (s *PostgresStore) CreateUserTable() error {
+	query := `create table if not exists user (
+        user_id serial primary key,
         email varchar(50) unique not null,
         password varchar(100) not null,
         first_name varchar(50) not null,
         last_name varchar(50) not null,
-        user_name varchar(50) not null,
-        phone_number varchar(11),
-        account_number serial, 
-        balance bigint not null,
+        user_name varchar(50) unique not null,
+        phone_number varchar(10),
         created_at timestamp,
+        last_login timestamp,
         role int,
-        is_active boolean
+        is_active_user boolean
     )`
 
 	_, err := s.db.Exec(query)
@@ -76,8 +75,67 @@ func (s *PostgresStore) CreateAccountTable() error {
 	return err
 }
 
-func (s *PostgresStore) CreateAccount(account *Account) error {
-	query := `insert into account 
+func (s *PostgresStore) CreateAccountTable() error {
+	query := `create table if not exists account (
+        account_id serial primary key,
+        fk_user serial references user(user_id), 
+        account_number serial unique, 
+        balance bigint,
+        created_at timestamp,
+        fk_account_type varchar(30) references role(role_id),
+        is_active_account boolean
+    )`
+
+	_, err := s.db.Exec(query)
+
+	return err
+}
+
+func (s *PostgresStore) CreateRoleTable() error {
+    query := `create table if not exists role (
+        role_id serial primary key,
+        role_name varchar(10)
+    )`
+
+    _, err := s.db.Query(query)
+
+    return err
+}
+
+func (s *PostgresStore) CreateTransferTable() error {
+	query := `create table if not exists transfer (
+        id serial primary key,
+        from_account int references account(account_id) not null,
+        to_account int references account(account_id) not null,
+        amount bigint not null,
+        description varchar(200),
+        created_at timestamp
+   )`
+
+	_, err := s.db.Query(query)
+
+	return err
+}
+
+func (s *PostgresStore) CreateTransactionTable() error {
+	query := `create table if not exists transaction (
+        id serial primary key,
+        account int references account(account_id) not null,
+        transaction_source varchar(50) not null,
+        amount bigint not null,
+        description varchar(200),
+        created_at timestamp,
+        transaction_type int
+    )`
+
+	_, err := s.db.Query(query)
+
+	return err
+}
+
+func (s *PostgresStore) CreateUser(account *Account) error {
+	query := `begin;
+    insert into account 
     (email, password, first_name, last_name, user_name, phone_number, account_number, balance, created_at, role, is_active) 
     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
 
@@ -178,35 +236,5 @@ func scanIntoAccount(rows *sql.Rows) (*Account, error) {
 }
 
 
-func (s *PostgresStore) CreateTransferTable() error {
-	query := `create table if not exists transfer (
-        id serial primary key,
-        from_account int references account(id) not null,
-        to_account int references account(id) not null,
-        amount bigint not null,
-        description varchar(200),
-        created_at timestamp
-   )`
-
-	_, err := s.db.Query(query)
-
-	return err
-}
-
 func (s *PostgresStore) CreateTransfer() {}
 
-func (s *PostgresStore) CreateTransactionTable() error {
-	query := `create table if not exists transaction (
-        id serial primary key,
-        account int references account(id) not null,
-        transaction_source varchar(50) not null,
-        amount bigint not null,
-        description varchar(200),
-        created_at timestamp,
-        transaction_type int
-    )`
-
-	_, err := s.db.Query(query)
-
-	return err
-}

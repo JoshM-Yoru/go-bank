@@ -9,7 +9,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-type CreateAccountRequest struct {
+type CreateUserRequest struct {
 	Email       string `json:"email"`
 	Password    string `json:"-"`
 	FirstName   string `json:"firstName"`
@@ -37,6 +37,13 @@ const (
 	Guest
 )
 
+type AccountType int
+
+const (
+	Checking AccountType = iota
+	Savings
+)
+
 type TransactionType int
 
 const (
@@ -44,19 +51,28 @@ const (
 	Credit
 )
 
+type User struct {
+	ID          int       `json:"user_id"`
+	Email       string    `json:"email"`
+	Password    string    `json:"-"`
+	FirstName   string    `json:"firstName"`
+	LastName    string    `json:"lastName"`
+	UserName    string    `json:"userName"`
+	PhoneNumber string    `json:"phoneNumber"`
+	CreatedAt   time.Time `json:"createdAt"`
+	LastLogin   time.Time `json:"lastLogin"`
+	Role        Role      `json:"role"`
+	IsActive    bool      `json:"isActive"`
+}
+
 type Account struct {
-	ID            int       `json:"id"`
-	Email         string    `json:"email"`
-	Password      string    `json:"-"`
-	FirstName     string    `json:"firstName"`
-	LastName      string    `json:"lastName"`
-	UserName      string    `json:"userName"`
-	PhoneNumber   string    `json:"phoneNumber"`
-	AccountNumber int64     `json:"accountNumber"`
-	Balance       int64     `json:"balance"`
-	CreatedAt     time.Time `json:"createdAt"`
-	Role          Role      `json:"role"`
-	IsActive      bool      `json:"isActive"`
+	ID              int         `json:"account_id"`
+	UserID          int         `json:"user_id"`
+	AccountNumber   int64       `json:"accountNumber"`
+	Balance         int64       `json:"balance"`
+	CreatedAt       time.Time   `json:"createdAt"`
+	AccountType     AccountType `json:"accountType"`
+	IsActiveAccount bool        `json:"isActiveAccount"`
 }
 
 type TransferRequest struct {
