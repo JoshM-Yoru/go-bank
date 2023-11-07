@@ -47,7 +47,7 @@ func (s *APIServer) Run() {
 
 	router.HandleFunc("/login", makeHTTPHandleFunc(s.handleLogin))
 	router.HandleFunc("/account", makeHTTPHandleFunc(s.handleAccount))
-	router.HandleFunc("/account/{id}", withJWTAuth(makeHTTPHandleFunc(s.handleGetAccountByID), s.store))
+	router.HandleFunc("/account/{id}", withJWTAuth(makeHTTPHandleFunc(s.handleGetUserByID), s.store))
 	router.HandleFunc("/transfer", makeHTTPHandleFunc(s.handleTransfer))
 	http.Handle("/", router)
 
@@ -76,29 +76,29 @@ func (s *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	account, err := s.store.GetAccountByEmail(loginReq.Email)
+	user, err := s.store.GetUserByEmail(loginReq.Email)
 	if err != nil {
 		return fmt.Errorf("Incorrect Email or Password")
 	}
 
-	if !account.validatePassword(loginReq.Password) {
+	if !user.validatePassword(loginReq.Password) {
 		return fmt.Errorf("Incorrect Email or Password")
 	}
 
-	token, err := createJWT(account)
+	token, err := createJWT(user)
 	if err != nil {
 		return err
 	}
 
 	response := LoginResponse{
-		AccountNumber: account.AccountNumber,
-		Token:         token,
+		UserName: user.UserName,
+		Token:    token,
 	}
 
 	return WriteJSON(w, http.StatusOK, response)
 }
 
-func (s *APIServer) handleGetAccountByID(w http.ResponseWriter, r *http.Request) error {
+func (s *APIServer) handleGetUserByID(w http.ResponseWriter, r *http.Request) error {
 	if r.Method == "GET" {
 
 		id, err := getID(r)
@@ -106,12 +106,12 @@ func (s *APIServer) handleGetAccountByID(w http.ResponseWriter, r *http.Request)
 			return err
 		}
 
-		account, err := s.store.GetAccountByID(id)
+		user, err := s.store.GetUserByID(id)
 		if err != nil {
 			return err
 		}
 
-		return WriteJSON(w, http.StatusOK, account)
+		return WriteJSON(w, http.StatusOK, user)
 	}
 
 	if r.Method == "DELETE" {
@@ -132,32 +132,32 @@ func (s *APIServer) handleGetAccount(w http.ResponseWriter, r *http.Request) err
 }
 
 func (s *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) error {
-	createAccountReq := new(CreateAccountRequest)
-	if err := json.NewDecoder(r.Body).Decode(createAccountReq); err != nil {
+	createUserReq := new(CreateUserRequest)
+	if err := json.NewDecoder(r.Body).Decode(createUserReq); err != nil {
 		return err
 	}
 
-	account, err := NewAccount(createAccountReq.Email, createAccountReq.Password, createAccountReq.FirstName, createAccountReq.LastName, createAccountReq.PhoneNumber)
+	user, account, err := NewUserAccount(createUserReq.Email, createUserReq.Password, createUserReq.FirstName, createUserReq.LastName, createUserReq.PhoneNumber, int64(createUserReq.Balance), Role(createUserReq.Role), AccountType(createUserReq.AccountType))
 	if err != nil {
 		return err
 	}
 
-	if err := validateAccountInfo(account); err != nil {
+	if err := validateUserInfo(user); err != nil {
 		return err
 	}
 
-	if err := s.store.CreateAccount(account); err != nil {
+	if err := s.store.CreateUser(user, account); err != nil {
 		return err
 	}
 
-	tokenString, err := createJWT(account)
+	tokenString, err := createJWT(user)
 	if err != nil {
 		return err
 	}
 
 	fmt.Println("JWT Token: ", tokenString)
 
-	return WriteJSON(w, http.StatusOK, account)
+	return WriteJSON(w, http.StatusOK, user)
 }
 
 func (s *APIServer) handleDeleteAccount(w http.ResponseWriter, r *http.Request) error {
@@ -183,10 +183,10 @@ func (s *APIServer) handleTransfer(w http.ResponseWriter, r *http.Request) error
 }
 
 // JWT Functions
-func createJWT(account *Account) (string, error) {
+func createJWT(user *User) (string, error) {
 	claims := &jwt.MapClaims{
 		"ExpiresAt":     15000,
-		"accountNumber": account.AccountNumber,
+		"accountNumber": user.UserName,
 	}
 
 	secret := os.Getenv("JWT_SECRET")
@@ -214,25 +214,25 @@ func withJWTAuth(handlerFunc http.HandlerFunc, store Storage) http.HandlerFunc {
 			return
 		}
 
-		userId, err := getID(r)
-		if err != nil {
-			permissionDenied(w)
-			log.Println("No id in params")
-			return
-		}
-		account, err := store.GetAccountByID(userId)
-		if err != nil {
-			permissionDenied(w)
-			log.Println("Invalid account number")
-			return
-		}
-
-		claims := token.Claims.(jwt.MapClaims)
-		if account.AccountNumber != int64(claims["accountNumber"].(float64)) {
-			log.Println("Account numbers are not equal")
-			permissionDenied(w)
-			return
-		}
+		// userId, err := getID(r)
+		// if err != nil {
+		// 	permissionDenied(w)
+		// 	log.Println("No id in params")
+		// 	return
+		// }
+		// account, err := store.GetUserByID(userId)
+		// if err != nil {
+		// 	permissionDenied(w)
+		// 	log.Println("Invalid account number")
+		// 	return
+		// }
+		//
+		// claims := token.Claims.(jwt.MapClaims)
+		// if account.AccountNumber != int64(claims["accountNumber"].(float64)) {
+		// 	log.Println("Account numbers are not equal")
+		// 	permissionDenied(w)
+		// 	return
+		// }
 
 		handlerFunc(w, r)
 	}
@@ -250,7 +250,7 @@ func validateJWT(tokenString string) (*jwt.Token, error) {
 	})
 }
 
-func validateAccountInfo(info *Account) error {
+func validateUserInfo(info *User) error {
 	if strings.TrimSpace(info.Email) == "" || strings.TrimSpace(info.FirstName) == "" || strings.TrimSpace(info.LastName) == "" {
 		return fmt.Errorf("No whitespace or blank fields allowed")
 	}

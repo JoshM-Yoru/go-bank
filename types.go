@@ -9,32 +9,12 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-type CreateUserRequest struct {
-	Email       string `json:"email"`
-	Password    string `json:"-"`
-	FirstName   string `json:"firstName"`
-	LastName    string `json:"lastName"`
-	UserName    string `json:"userName"`
-	PhoneNumber string `json:"phoneNumber"`
-}
-
-type LoginRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
-
-type LoginResponse struct {
-	AccountNumber int64  `json:"accountNumber"`
-	Token         string `json:"token"`
-}
-
 type Role int
 
 const (
 	Admin Role = iota
 	Employee
 	Customer
-	Guest
 )
 
 type AccountType int
@@ -50,6 +30,28 @@ const (
 	Debit TransactionType = iota
 	Credit
 )
+
+type CreateUserRequest struct {
+	Email       string      `json:"email"`
+	Password    string      `json:"-"`
+	FirstName   string      `json:"firstName"`
+	LastName    string      `json:"lastName"`
+	UserName    string      `json:"userName"`
+	PhoneNumber string      `json:"phoneNumber"`
+	Balance     int         `json:"balance"`
+	Role        Role        `json:"role"`
+	AccountType AccountType `json:"accountType"`
+}
+
+type LoginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type LoginResponse struct {
+	UserName string `json:"userName"`
+	Token    string `json:"token"`
+}
 
 type User struct {
 	ID          int       `json:"user_id"`
@@ -75,68 +77,59 @@ type Account struct {
 	IsActiveAccount bool        `json:"isActiveAccount"`
 }
 
+type FullAccount struct {
+	User     User
+	Accounts []Account
+}
+
 type TransferRequest struct {
 	ToAccount int `json:"toAccount"`
 	Amount    int `json:"amount"`
 }
 
-func NewAdminAccount(email, password, firstName, lastName, phoneNumber string) (*Account, error) {
+func NewAdminAccount(email, password, firstName, lastName, phoneNumber string) (*User, error) {
 	hashedPassword, err := hashPassword(password)
 	if err != nil {
 		log.Println("Unable to hash password")
 		return nil, err
 	}
-	return &Account{
-		Email:         email,
-		Password:      hashedPassword,
-		FirstName:     firstName,
-		LastName:      lastName,
-		UserName:      "$" + firstName + "." + lastName + "#" + strconv.Itoa(int(rand.Intn(9000)+1000)),
-		PhoneNumber:   phoneNumber,
-		AccountNumber: int64(rand.Intn(1000000)),
-		CreatedAt:     time.Now().UTC(),
-		Role:          Admin,
+	return &User{
+		Email:       email,
+		Password:    hashedPassword,
+		FirstName:   firstName,
+		LastName:    lastName,
+		UserName:    "$" + firstName + "." + lastName + "#" + strconv.Itoa(int(rand.Intn(9000)+1000)),
+		PhoneNumber: "",
+		CreatedAt:   time.Now().UTC(),
+		LastLogin:   time.Now().UTC(),
+		Role:        Admin,
+		IsActive:    true,
 	}, nil
 }
 
-func NewEmployeeAccount(email, password, firstName, lastName, phoneNumber string) (*Account, error) {
+func NewUserAccount(email, password, firstName, lastName, phoneNumber string, balance int64, role Role, accType AccountType) (*User, *Account, error) {
 	hashedPassword, err := hashPassword(password)
 	if err != nil {
 		log.Println("Unable to hash password")
-		return nil, err
+		return nil, nil, err
 	}
-	return &Account{
-		Email:         email,
-		Password:      hashedPassword,
-		FirstName:     firstName,
-		LastName:      lastName,
-		UserName:      "$" + firstName + "." + lastName + "#" + strconv.Itoa(int(rand.Intn(9000)+1000)),
-		PhoneNumber:   phoneNumber,
-		AccountNumber: int64(rand.Intn(1000000)),
-		CreatedAt:     time.Now().UTC(),
-		Role:          Employee,
-		IsActive:      true,
-	}, nil
-}
-
-func NewAccount(email, password, firstName, lastName, phoneNumber string) (*Account, error) {
-	hashedPassword, err := hashPassword(password)
-	if err != nil {
-		log.Println("Unable to hash password")
-		return nil, err
-	}
-	return &Account{
-		Email:         email,
-		Password:      hashedPassword,
-		FirstName:     firstName,
-		LastName:      lastName,
-		UserName:      "$" + firstName + "." + lastName + "#" + strconv.Itoa(int(rand.Intn(9000)+1000)),
-		PhoneNumber:   phoneNumber,
-		AccountNumber: int64(rand.Intn(1000000)),
-		CreatedAt:     time.Now().UTC(),
-		Role:          Customer,
-		IsActive:      true,
-	}, nil
+	return &User{
+			Email:       email,
+			Password:    hashedPassword,
+			FirstName:   firstName,
+			LastName:    lastName,
+			UserName:    "$" + firstName + "." + lastName + "#" + strconv.Itoa(int(rand.Intn(9000)+1000)),
+			PhoneNumber: phoneNumber,
+			CreatedAt:   time.Now().UTC(),
+			Role:        role,
+			IsActive:    true,
+		}, &Account{
+			AccountNumber:   int64(rand.Intn(1000000)),
+			Balance:         balance,
+			CreatedAt:       time.Now().UTC(),
+			AccountType:     accType,
+			IsActiveAccount: true,
+		}, nil
 }
 
 func hashPassword(password string) (string, error) {
@@ -148,6 +141,6 @@ func hashPassword(password string) (string, error) {
 	return string(hashedPW), nil
 }
 
-func (account *Account) validatePassword(pw string) bool {
-	return bcrypt.CompareHashAndPassword([]byte(account.Password), []byte(pw)) == nil
+func (user *User) validatePassword(pw string) bool {
+	return bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(pw)) == nil
 }

@@ -9,12 +9,14 @@ import (
 )
 
 type Storage interface {
-	CreateAccount(*Account) error
+	CreateUser(*User, *Account) error
 	DeleteAccount(int) error
-	UpdateAccount(*Account) error
+	UpdateUser(*User) error
+	GetUsers() ([]*User, error)
 	GetAccounts() ([]*Account, error)
-	GetAccountByID(int) (*Account, error)
-	GetAccountByEmail(string) (*Account, error)
+	GetUserByID(int) (*User, error)
+	GetUserByEmail(string) (*User, error)
+	GetAccountByUserID(int) (*FullAccount, error)
 }
 
 type PostgresStore struct {
@@ -37,26 +39,35 @@ func NewPostgresStore() (*PostgresStore, error) {
 }
 
 func (s *PostgresStore) Init() error {
+	roleTable := s.CreateRoleTable()
+	if roleTable != nil {
+		return roleTable
+	}
+	userTable := s.CreateUserTable()
+	if userTable != nil {
+		return userTable
+	}
 	accTable := s.CreateAccountTable()
-    if accTable !=nil {
-        return accTable
-    }
+	if accTable != nil {
+		return accTable
+	}
 
 	transferTable := s.CreateTransferTable()
-    if transferTable !=nil {
-        return transferTable
-    }
+	if transferTable != nil {
+		return transferTable
+	}
 
 	transactionTable := s.CreateTransactionTable()
-    if transactionTable !=nil {
-        return transactionTable
-    }
+	if transactionTable != nil {
+		return transactionTable
+	}
 
 	return nil
 }
 
 func (s *PostgresStore) CreateUserTable() error {
-	query := `create table if not exists user (
+    //need to add role reference
+	query := `create table if not exists user_profile (
         user_id serial primary key,
         email varchar(50) unique not null,
         password varchar(100) not null,
@@ -76,13 +87,14 @@ func (s *PostgresStore) CreateUserTable() error {
 }
 
 func (s *PostgresStore) CreateAccountTable() error {
+    //need to add fk_account_type reference
 	query := `create table if not exists account (
         account_id serial primary key,
-        fk_user serial references user(user_id), 
+        fk_user serial references user_profile(user_id), 
         account_number serial unique, 
         balance bigint,
         created_at timestamp,
-        fk_account_type varchar(30) references role(role_id),
+        fk_account_type int,
         is_active_account boolean
     )`
 
@@ -92,14 +104,14 @@ func (s *PostgresStore) CreateAccountTable() error {
 }
 
 func (s *PostgresStore) CreateRoleTable() error {
-    query := `create table if not exists role (
+	query := `create table if not exists role (
         role_id serial primary key,
         role_name varchar(10)
     )`
 
-    _, err := s.db.Query(query)
+	_, err := s.db.Query(query)
 
-    return err
+	return err
 }
 
 func (s *PostgresStore) CreateTransferTable() error {
@@ -133,43 +145,91 @@ func (s *PostgresStore) CreateTransactionTable() error {
 	return err
 }
 
-func (s *PostgresStore) CreateUser(account *Account) error {
-	query := `begin;
-    insert into account 
-    (email, password, first_name, last_name, user_name, phone_number, account_number, balance, created_at, role, is_active) 
-    values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
+func (s *PostgresStore) CreateUser(user *User, account *Account) error {
+	if user.Role == Admin {
+		query := `insert into user_profile (email, password, first_name, last_name, user_name, phone_number, created_at, last_login, role, is_active) 
+    values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
 
+		_, err := s.db.Query(
+			query,
+			user.Email,
+			user.Password,
+			user.FirstName,
+			user.LastName,
+			user.UserName,
+			user.PhoneNumber,
+			user.CreatedAt,
+			user.LastLogin,
+			user.Role,
+			user.IsActive,
+		)
+		if err != nil {
+			if strings.Contains(err.Error(), "duplicate") {
+				return fmt.Errorf("Email in use")
+			}
+		}
+	} else {
+		query := `begin; insert into user_profile (email, password, first_name, last_name, user_name, phone_number, created_at, last_login, role, is_active) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
+    select currval(fk_user);
+    insert into account (fk_user, account_number, balance, created_at, fk_account_type, is_active_account)
+    values ($11, $12, $13, $14, $15);
+    end;
+    commit;
+    `
 
-	_, err := s.db.Query(
-		query,
-		account.Email,
-		account.Password,
-		account.FirstName,
-		account.LastName,
-        account.UserName,
-		account.PhoneNumber,
-		account.AccountNumber,
-		account.Balance,
-		account.CreatedAt,
-		account.Role,
-        account.IsActive,
-	)
-	if err != nil {
-        if strings.Contains(err.Error(), "duplicate") {
-            return fmt.Errorf("Email in use")
-        }
+		_, err := s.db.Query(
+			query,
+			user.Email,
+			user.Password,
+			user.FirstName,
+			user.LastName,
+			user.UserName,
+			user.PhoneNumber,
+			user.CreatedAt,
+			user.LastLogin,
+			user.Role,
+			user.IsActive,
+			account.AccountNumber,
+			account.Balance,
+			account.CreatedAt,
+			account.IsActiveAccount,
+		)
+		if err != nil {
+			if strings.Contains(err.Error(), "duplicate") {
+				return fmt.Errorf("Email in use")
+			}
+		}
 	}
 
 	return nil
 }
 
-func (s *PostgresStore) UpdateAccount(*Account) error {
+func (s *PostgresStore) UpdateUser(*User) error {
 	return nil
 }
 
 func (s *PostgresStore) DeleteAccount(id int) error {
 	_, err := s.db.Query("update account set is_active = false where id = $1", id)
 	return err
+}
+
+func (s *PostgresStore) GetUsers() ([]*User, error) {
+	rows, err := s.db.Query("select * from user where is_active = true")
+	if err != nil {
+		return nil, err
+	}
+
+	users := []*User{}
+
+	for rows.Next() {
+		user, err := scanIntoUser(rows)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+
+	return users, nil
 }
 
 func (s *PostgresStore) GetAccounts() ([]*Account, error) {
@@ -191,50 +251,65 @@ func (s *PostgresStore) GetAccounts() ([]*Account, error) {
 	return accounts, nil
 }
 
-func (s *PostgresStore) GetAccountByID(id int) (*Account, error) {
-	rows, err := s.db.Query("select * from account where is_active = true and id = $1", id)
+func (s *PostgresStore) GetUserByID(id int) (*User, error) {
+	rows, err := s.db.Query("select * from user where is_active = true and id = $1", id)
 	if err != nil {
 		return nil, err
 	}
 	for rows.Next() {
-		return scanIntoAccount(rows)
+		return scanIntoUser(rows)
 	}
 
 	return nil, fmt.Errorf("Account %d not found", id)
 }
 
-func (s *PostgresStore) GetAccountByEmail(email string) (*Account, error) {
-	rows, err := s.db.Query("select * from account where is_active = true email = $1", email)
+func (s *PostgresStore) GetUserByEmail(email string) (*User, error) {
+	rows, err := s.db.Query("select * from user where is_active = true email = $1", email)
 	if err != nil {
 		return nil, err
 	}
 	for rows.Next() {
-		return scanIntoAccount(rows)
+		return scanIntoUser(rows)
 	}
 
-	return nil, fmt.Errorf("Account %v not found", email)
+	return nil, fmt.Errorf("User %v not found", email)
+}
+
+func (s *PostgresStore) GetAccountByUserID(id int) (*FullAccount, error) {
+    return nil, nil
+}
+
+func scanIntoUser(rows *sql.Rows) (*User, error) {
+	user := new(User)
+	err := rows.Scan(
+		&user.ID,
+		&user.Email,
+		&user.Password,
+		&user.FirstName,
+		&user.LastName,
+		&user.UserName,
+		&user.PhoneNumber,
+		&user.CreatedAt,
+		&user.LastLogin,
+		&user.Role,
+		&user.IsActive,
+	)
+
+	return user, err
 }
 
 func scanIntoAccount(rows *sql.Rows) (*Account, error) {
 	account := new(Account)
 	err := rows.Scan(
 		&account.ID,
-		&account.Email,
-		&account.Password,
-		&account.FirstName,
-		&account.LastName,
-		&account.UserName,
-		&account.PhoneNumber,
 		&account.AccountNumber,
 		&account.Balance,
 		&account.CreatedAt,
-		&account.Role,
-		&account.IsActive,
+		&account.AccountType,
+		&account.IsActiveAccount,
 	)
 
 	return account, err
 }
 
-
 func (s *PostgresStore) CreateTransfer() {}
-

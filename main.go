@@ -6,19 +6,18 @@ import (
 	"log"
 )
 
-func seedAccount(store Storage, email, pw, fname, lname, pNumber string) *Account {
-	acc, err := NewAdminAccount(email, pw, fname, lname, pNumber)
+func seedAccount(store Storage, email, pw, fname, lname, pNumber string) *User {
+	user, err := NewAdminAccount(email, pw, fname, lname, pNumber)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if err := store.CreateAccount(acc); err != nil {
+	if err := store.CreateUser(user, &Account{}); err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Println("new account: ", acc.AccountNumber)
 
-	return acc
+	return user
 }
 
 func seedTransaction(store Storage, from, to int, description string, transactionType int) {
