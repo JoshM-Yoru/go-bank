@@ -12,22 +12,22 @@ import (
 type Role int
 
 const (
-	Admin Role = iota
-	Employee
+	Admin Role = iota + 1
+	Employee 
 	Customer
 )
 
 type AccountType int
 
 const (
-	Checking AccountType = iota
+	Checking AccountType = iota + 1
 	Savings
 )
 
 type TransactionType int
 
 const (
-	Debit TransactionType = iota
+	Debit TransactionType = iota + 1
 	Credit
 )
 
@@ -39,8 +39,8 @@ type CreateUserRequest struct {
 	UserName    string      `json:"userName"`
 	PhoneNumber string      `json:"phoneNumber"`
 	Balance     int         `json:"balance"`
-	Role        Role        `json:"role"`
-	AccountType AccountType `json:"accountType"`
+	Role        string        `json:"role"`
+	AccountType string `json:"accountType"`
 }
 
 type LoginRequest struct {
@@ -108,6 +108,7 @@ func NewAdminAccount(email, password, firstName, lastName, phoneNumber string) (
 }
 
 func NewUserAccount(email, password, firstName, lastName, phoneNumber string, balance int64, role Role, accType AccountType) (*User, *Account, error) {
+
 	hashedPassword, err := hashPassword(password)
 	if err != nil {
 		log.Println("Unable to hash password")
@@ -124,7 +125,7 @@ func NewUserAccount(email, password, firstName, lastName, phoneNumber string, ba
 			Role:        role,
 			IsActive:    true,
 		}, &Account{
-			AccountNumber:   int64(rand.Intn(1000000)),
+			AccountNumber:   int64(rand.Intn(990000) + 100000),
 			Balance:         balance,
 			CreatedAt:       time.Now().UTC(),
 			AccountType:     accType,

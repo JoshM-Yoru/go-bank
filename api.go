@@ -137,7 +137,27 @@ func (s *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) 
 		return err
 	}
 
-	user, account, err := NewUserAccount(createUserReq.Email, createUserReq.Password, createUserReq.FirstName, createUserReq.LastName, createUserReq.PhoneNumber, int64(createUserReq.Balance), Role(createUserReq.Role), AccountType(createUserReq.AccountType))
+	var role Role
+
+	if createUserReq.Role == "Admin" {
+		role = 1
+	} else if createUserReq.Role == "Employee" {
+		role = 2
+	} else {
+		role = 3
+	}
+
+	var accType AccountType
+
+	if createUserReq.AccountType == "Checking" {
+		accType = 1
+	} else if createUserReq.AccountType == "Savings" {
+		accType = 2
+	} else {
+		return fmt.Errorf("Must specifiy 'Checking' or 'Savings' account")
+	}
+
+	user, account, err := NewUserAccount(createUserReq.Email, createUserReq.Password, createUserReq.FirstName, createUserReq.LastName, createUserReq.PhoneNumber, int64(createUserReq.Balance), Role(role), AccountType(accType))
 	if err != nil {
 		return err
 	}
