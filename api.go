@@ -48,7 +48,8 @@ func (s *APIServer) Run() {
 	router.HandleFunc("/login", makeHTTPHandleFunc(s.handleLogin))
 	router.HandleFunc("/account", makeHTTPHandleFunc(s.handleAccount))
 	router.HandleFunc("/account/{id}", withJWTAuth(makeHTTPHandleFunc(s.handleGetUserByID), s.store))
-	router.HandleFunc("/transfer", makeHTTPHandleFunc(s.handleTransfer))
+	router.HandleFunc("/account/{id}/update", withJWTAuth(makeHTTPHandleFunc(s.handleUserUpdate), s.store))
+	router.HandleFunc("/transfer", makeHTTPHandleFunc(s.handleTransaction))
 	http.Handle("/", router)
 
 	log.Println("JSON API running on port: ", s.listenAddress)
@@ -157,7 +158,18 @@ func (s *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) 
 		return fmt.Errorf("Must specifiy 'Checking' or 'Savings' account")
 	}
 
-	user, account, err := NewUserAccount(createUserReq.Email, createUserReq.Password, createUserReq.FirstName, createUserReq.LastName, createUserReq.PhoneNumber, int64(createUserReq.Balance), Role(role), AccountType(accType))
+	var referrerId int
+	if createUserReq.ReferrerID != "" {
+		referralAcc, err := s.store.GetUserByUserName(createUserReq.ReferrerID)
+		if err != nil {
+			fmt.Println(err)
+			return fmt.Errorf("Referral Username invalid")
+		}
+		referrerId = referralAcc.ID
+		createUserReq.Balance = 100
+	}
+
+	user, account, err := NewUserAccount(createUserReq.Email, createUserReq.Password, createUserReq.FirstName, createUserReq.LastName, createUserReq.PhoneNumber, referrerId, int64(createUserReq.Balance), Role(role), AccountType(accType))
 	if err != nil {
 		return err
 	}
@@ -180,6 +192,29 @@ func (s *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) 
 	return WriteJSON(w, http.StatusOK, user)
 }
 
+func (s *APIServer) handleUserUpdate(w http.ResponseWriter, r *http.Request) error {
+	if r.Method != "PUT" {
+		return fmt.Errorf("Method not allowed")
+	}
+
+	id, err := getID(r)
+	if err != nil {
+		return err
+	}
+
+	var data map[string]interface{}
+
+	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+		return err
+	}
+
+	if err := s.store.UpdateUser(id, data); err != nil {
+		return err
+	}
+
+	return WriteJSON(w, http.StatusOK, map[string]string{"updated": "User Profile Updated"})
+}
+
 func (s *APIServer) handleDeleteAccount(w http.ResponseWriter, r *http.Request) error {
 	id, err := getID(r)
 	if err != nil {
@@ -193,13 +228,13 @@ func (s *APIServer) handleDeleteAccount(w http.ResponseWriter, r *http.Request) 
 	return WriteJSON(w, http.StatusOK, map[string]int{"deleted": id})
 }
 
-func (s *APIServer) handleTransfer(w http.ResponseWriter, r *http.Request) error {
-	transferReq := new(TransferRequest)
-	if err := json.NewDecoder(r.Body).Decode(transferReq); err != nil {
+func (s *APIServer) handleTransaction(w http.ResponseWriter, r *http.Request) error {
+	transactionReq := new(TransactionRequest)
+	if err := json.NewDecoder(r.Body).Decode(transactionReq); err != nil {
 		return err
 	}
 	defer r.Body.Close()
-	return WriteJSON(w, http.StatusOK, transferReq)
+	return WriteJSON(w, http.StatusOK, transactionReq)
 }
 
 // JWT Functions
@@ -223,14 +258,14 @@ func withJWTAuth(handlerFunc http.HandlerFunc, store Storage) http.HandlerFunc {
 
 		token, err := validateJWT(tokenString)
 		if err != nil {
-			permissionDenied(w)
 			log.Println("Invalid Token")
+			permissionDenied(w)
 			return
 		}
 
 		if !token.Valid {
-			permissionDenied(w)
 			log.Println("Invalid Token")
+			permissionDenied(w)
 			return
 		}
 

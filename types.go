@@ -13,7 +13,7 @@ type Role int
 
 const (
 	Admin Role = iota + 1
-	Employee 
+	Employee
 	Customer
 )
 
@@ -29,23 +29,32 @@ type TransactionType int
 const (
 	Debit TransactionType = iota + 1
 	Credit
+	Transfer
 )
 
 type CreateUserRequest struct {
-	Email       string      `json:"email"`
-	Password    string      `json:"-"`
-	FirstName   string      `json:"firstName"`
-	LastName    string      `json:"lastName"`
-	UserName    string      `json:"userName"`
-	PhoneNumber string      `json:"phoneNumber"`
-	Balance     int         `json:"balance"`
-	Role        string        `json:"role"`
+	Email       string `json:"email"`
+	Password    string `json:"-"`
+	FirstName   string `json:"firstName"`
+	LastName    string `json:"lastName"`
+	UserName    string `json:"userName"`
+	PhoneNumber string `json:"phoneNumber"`
+	ReferrerID  string `json:"referrerID"`
+	Balance     int    `json:"balance"`
+	Role        string `json:"role"`
 	AccountType string `json:"accountType"`
 }
 
 type LoginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+}
+
+type TransactionRequest struct {
+	FromAccount     int `json:"fromAccount"`
+	ToAccount       int `json:"toAccount"`
+	Amount          int `json:"amount"`
+	TransactionType int `json:"transactionType"`
 }
 
 type LoginResponse struct {
@@ -61,6 +70,7 @@ type User struct {
 	LastName    string    `json:"lastName"`
 	UserName    string    `json:"userName"`
 	PhoneNumber string    `json:"phoneNumber"`
+	ReferrerID  int       `json:"referrerID"`
 	CreatedAt   time.Time `json:"createdAt"`
 	LastLogin   time.Time `json:"lastLogin"`
 	Role        Role      `json:"role"`
@@ -80,11 +90,6 @@ type Account struct {
 type FullAccount struct {
 	User     User
 	Accounts []Account
-}
-
-type TransferRequest struct {
-	ToAccount int `json:"toAccount"`
-	Amount    int `json:"amount"`
 }
 
 func NewAdminAccount(email, password, firstName, lastName, phoneNumber string) (*User, error) {
@@ -107,7 +112,7 @@ func NewAdminAccount(email, password, firstName, lastName, phoneNumber string) (
 	}, nil
 }
 
-func NewUserAccount(email, password, firstName, lastName, phoneNumber string, balance int64, role Role, accType AccountType) (*User, *Account, error) {
+func NewUserAccount(email, password, firstName, lastName, phoneNumber string, referrerID int, balance int64, role Role, accType AccountType) (*User, *Account, error) {
 
 	hashedPassword, err := hashPassword(password)
 	if err != nil {
@@ -121,6 +126,7 @@ func NewUserAccount(email, password, firstName, lastName, phoneNumber string, ba
 			LastName:    lastName,
 			UserName:    "$" + firstName + "." + lastName + "#" + strconv.Itoa(int(rand.Intn(9000)+1000)),
 			PhoneNumber: phoneNumber,
+			ReferrerID:  referrerID,
 			CreatedAt:   time.Now().UTC(),
 			Role:        role,
 			IsActive:    true,
