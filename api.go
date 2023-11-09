@@ -202,7 +202,7 @@ func (s *APIServer) handleUserUpdate(w http.ResponseWriter, r *http.Request) err
 		return err
 	}
 
-	var data map[string]interface{}
+	var data map[string]string
 
 	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
 		return err

@@ -11,7 +11,7 @@ import (
 type Storage interface {
 	CreateUser(*User, *Account) error
 	DeleteAccount(int) error
-	UpdateUser(int, map[string]interface{}) error
+	UpdateUser(int, map[string]string) error
 	GetUsers() ([]*User, error)
 	GetAccounts() ([]*Account, error)
 	GetUserByID(int) (*User, error)
@@ -260,19 +260,21 @@ func (s *PostgresStore) CreateUser(user *User, account *Account) error {
 	return nil
 }
 
-func (s *PostgresStore) UpdateUser(id int, userUpdates map[string]interface{}) error {
-	var setValues []string
+func (s *PostgresStore) UpdateUser(id int, userUpdates map[string]string) error {
+	// var setValues []string
 	var values []interface{}
 
+	var queryStrings []string
+
 	for k, v := range userUpdates {
-		setValues = append(setValues, fmt.Sprintf("%s = %d", k, len(values)+1))
-		values = append(values, v)
+        value := "'" + v + "'"
+		queryStrings = append(queryStrings, fmt.Sprintf("%s = %s", k, value))
 	}
 
-	query := fmt.Sprintf("update user_profile set %s where user_id = %d", strings.Join(setValues, ", "), len(values)+1)
-	values = append(values, id)
+	fmt.Println(values)
 
-    fmt.Println(values)
+	query := fmt.Sprintf("update user_profile set %s where user_id = %d", strings.Join(queryStrings, ", "), id)
+	fmt.Println(query)
 
 	_, err := s.db.Query(query, values...)
 
